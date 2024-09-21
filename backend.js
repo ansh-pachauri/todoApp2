@@ -1,15 +1,17 @@
-const express =require("express");
+const express = require("express");
 const app = express();
 const moongoes = require("mongoose");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
-const {z} = require("zod");
-const JWT_SECRET =" todosecretkey";
+const { z } = require("zod");
+const JWT_SECRET = " todosecretkey";
 const path = require('path');
 const cors = require('cors');
 
+
+
 //impot the models
-const {UserModel,TodoModel} = require("./database");
+const { UserModel, TodoModel } = require("./database");
 //connecting the database
 
 moongoes.connect("mongodb+srv://admin:9DmQpZqSJS14MF52@cluster0.hnft8.mongodb.net/todo3");
@@ -26,87 +28,138 @@ app.use(express.json());
 //     origin: ["http://localhost:3000"],
 // }));
 
-app.get("/",(req,res)=>{
-    res.sendFile(path.join(__dirname,"/frontTodo/frontend.html"));
+app.get("/", (req, res) => {
+    res.sendFile(path.join(__dirname, "/frontTodo/frontend.html"));
 })
 
 
 //signup request using the zod
-app.post("/signup", async (req,res)=>{
+// app.post("/signup", async (req,res)=>{
+//     const requireBody = z.object({
+//         name: z.string().min(3).max(20),
+//         email: z.string().email(),
+//         password: z.string().min(4).max(20).optional(),
+//     });
+//     //parsing the body by safe parse
+//     const parsedBody = requireBody.safeParse(req.body);
+//     if (!parsedBody.success) {
+//         res.json({
+//             message : "Formate is not correct"
+//         })
+//         return
+//     }
+//     const email = req.body.email;
+//     const password = req.body.password;
+//     const name = req.body.name;
+
+//     //hashing the password
+
+//     try{
+//         const hashedPassword = await bcrypt.hash(password,5);
+//     console.log("hashedPassword"+hashedPassword);
+//     
+
+
+//     //creating the user
+//     await UserModel.create({
+//         name:name,
+//         password:hash,
+//         email:email
+//     });
+
+//     res.json({
+//         message : "User created successfully and sign uped"
+//     });}catch(error){
+//         res.json({
+//             error: error
+//         })
+
+//     }
+// })
+
+app.post("/signup", (req, res) => {
     const requireBody = z.object({
         name: z.string().min(3).max(20),
         email: z.string().email(),
         password: z.string().min(4).max(20).optional(),
     });
-    //parsing the body by safe parse
+
+    // parsing the body by safeParse
     const parsedBody = requireBody.safeParse(req.body);
     if (!parsedBody.success) {
         res.json({
-            message : "Formate is not correct"
-        })
-        return
+            message: "Format is not correct"
+        });
+        return;
     }
+
     const email = req.body.email;
     const password = req.body.password;
     const name = req.body.name;
 
-    //hashing the password
+    // hashing the password
+    bcrypt.hash(password, 5)
+        .then(hashedPassword => {
+            console.log("hashedPassword" + hashedPassword);
 
-    try{const hashedPassword = await bcrypt.hash(password,5);
-    console.log(hashedPassword);
-    
-    //creating the user
-    await UserModel.create({
-        name:name,
-        password:hashedPassword,
-        email:email
-    });
-
-    res.json({
-        message : "User created successfully and sign uped"
-    });}catch(error){
-        res.json({
-            error: error
+            // creating the user
+            return UserModel.create({
+                name: name,
+                password: hashedPassword,
+                email: email
+            });
         })
-        
-    }
-})
+        .then(() => {
+            res.json({
+                message: "User created successfully and signed up"
+            });
+        })
+        .catch(error => {
+            res.json({
+                error: error
+            });
+        });
+});
 
-app.post("/signin",async(req,res)=>{
+
+app.post("/signin", async (req, res) => {
     const email = req.body.email;
     const password = req.body.password;
 
     //checking the user exist or not
     const response = await UserModel.findOne({
-        email:email,
-       
+        email: email,
+        password: password
+
     });
-    if(!response){
+    if (!response) {
         res.json({
-            message : "User not found"
+            message: "User not found"
         })
         return
     }
     //checking the password
-    const isMatch =  bcrypt.compare(password,response.password);
-    if(!isMatch){
+    const isMatch = bcrypt.compare(password, response.password);
+   ;
+    if (!isMatch) {
         res.status(403).send({
-            message : "Invalid password"
+            message: "Invalid password"
         })
-    }else{
+    } else {
         const token = jwt.sign({
-            id:response._id.toString()
-        },JWT_SECRET);
+            id: response._id.toString()
+        }, JWT_SECRET);
         res.json({
-            message : "succefullt signined",
+            message: "succefullt signined",
             token: token
         });
     }
+    console.log("respPass" + response.data.password);
     console.log(isMatch);
 })
 //creating the middleware
 
-function authenticationMiddlware(req,res,next) {
+function authenticationMiddlware(req, res, next) {
     // const token = req.headers.token;
     // const decodeData = jwt.verify(token,JWT_SECRET);
     // if(!decodeData){
@@ -119,33 +172,33 @@ function authenticationMiddlware(req,res,next) {
     // }
     const token = req.headers.authorization && req.headers.authorization.split(' ')[1];
 
-  // Check if a token is present
-  if (!token) {
-    return res.status(401).send({ message: "Unauthorized: No token provided" }); // Send a 401 (Unauthorized) response
-  }
-
-  try {
-    // Verify the token using JWT secret
-    const decodedData = jwt.verify(token, JWT_SECRET);
-    req.userId = decodedData.id; // Store the user ID from the decoded token for further use
-    next();
-  } catch (error) {
-    // Handle invalid token errors
-    if (error.name === 'JsonWebTokenError') {
-      return res.status(403).send({ message: "Invalid token" });
-    } else {
-      // Handle other errors
-      console.error('Error verifying token:', error);
-      return res.status(500).send({ message: "Internal server error" });
+    // Check if a token is present
+    if (!token) {
+        return res.status(401).send({ message: "Unauthorized: No token provided" }); // Send a 401 (Unauthorized) response
     }
-  }
+
+    try {
+        // Verify the token using JWT secret
+        const decodedData = jwt.verify(token, JWT_SECRET);
+        req.userId = decodedData.id; // Store the user ID from the decoded token for further use
+        next();
+    } catch (error) {
+        // Handle invalid token errors
+        if (error.name === 'JsonWebTokenError') {
+            return res.status(403).send({ message: "Invalid token" });
+        } else {
+            // Handle other errors
+            console.error('Error verifying token:', error);
+            return res.status(500).send({ message: "Internal server error" });
+        }
+    }
 
 }
 
-app.post("/todo",authenticationMiddlware,async(req,res)=>{
+app.post("/todo", authenticationMiddlware, async (req, res) => {
     const userId = req.userId;
     const title = req.body.title;
-    
+
     try {
         // Create the todo item
         const todo = await TodoModel.create({
@@ -165,19 +218,19 @@ app.post("/todo",authenticationMiddlware,async(req,res)=>{
     }
 })
 
-app.get("/todos",authenticationMiddlware,async(req,res)=>{
+app.get("/todos", authenticationMiddlware, async (req, res) => {
     const userId = req.body.userId;
-    const title =  req.body.title;
+    const title = req.body.title;
     const todo = await TodoModel.find({
-        userId:userId
+        userId: userId
     });
     res.json({
-        todo:todo,
-        title :title
+        todo: todo,
+        title: title
     })
 })
 
-app.post("/deletTodo",async(req,res)=>{
+app.post("/deletTodo", async (req, res) => {
     const userId = req.body.userId;
     const title = req.body.title;
     await TodoModel.deleteOne({
@@ -186,11 +239,11 @@ app.post("/deletTodo",async(req,res)=>{
     }
     );
     res.json({
-        "message" : "todo has deleted"
+        "message": "todo has deleted"
     });
 })
 
 
-app.listen(3000,()=>{
+app.listen(3000, () => {
     console.log("server is running on port 3000");
 });
