@@ -6,15 +6,16 @@ const bcrypt = require("bcrypt");
 const { z } = require("zod");
 const JWT_SECRET = " todosecretkey";
 const path = require('path');
-const cors = require('cors');
 
+const bodyParser = require('body-parser');
 
 
 //impot the models
 const { UserModel, TodoModel } = require("./database");
+const { error } = require("console");
 //connecting the database
 
-moongoes.connect("mongodb+srv://admin:9DmQpZqSJS14MF52@cluster0.hnft8.mongodb.net/todo3");
+moongoes.connect("");
 
 // Serve static files (HTML, CSS, JS) from multiple directories
 app.use(express.static(path.join(__dirname, "frontTodo"))); // For your main To-Do app
@@ -24,58 +25,11 @@ app.use(express.static(path.join(__dirname, "signup"))); // For Sign-up
 
 //middleware
 app.use(express.json());
-// app.use(cors({
-//     origin: ["http://localhost:3000"],
-// }));
-
+app.use(bodyParser.json());
 app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "/frontTodo/frontend.html"));
 })
 
-
-//signup request using the zod
-// app.post("/signup", async (req,res)=>{
-//     const requireBody = z.object({
-//         name: z.string().min(3).max(20),
-//         email: z.string().email(),
-//         password: z.string().min(4).max(20).optional(),
-//     });
-//     //parsing the body by safe parse
-//     const parsedBody = requireBody.safeParse(req.body);
-//     if (!parsedBody.success) {
-//         res.json({
-//             message : "Formate is not correct"
-//         })
-//         return
-//     }
-//     const email = req.body.email;
-//     const password = req.body.password;
-//     const name = req.body.name;
-
-//     //hashing the password
-
-//     try{
-//         const hashedPassword = await bcrypt.hash(password,5);
-//     console.log("hashedPassword"+hashedPassword);
-//     
-
-
-//     //creating the user
-//     await UserModel.create({
-//         name:name,
-//         password:hash,
-//         email:email
-//     });
-
-//     res.json({
-//         message : "User created successfully and sign uped"
-//     });}catch(error){
-//         res.json({
-//             error: error
-//         })
-
-//     }
-// })
 
 app.post("/signup", (req, res) => {
     const requireBody = z.object({
@@ -110,6 +64,8 @@ app.post("/signup", (req, res) => {
             });
         })
         .then(() => {
+           
+
             res.json({
                 message: "User created successfully and signed up"
             });
@@ -122,65 +78,65 @@ app.post("/signup", (req, res) => {
 });
 
 
+
+
 app.post("/signin", async (req, res) => {
+    //checking to enter in signin rout
+    console.log("Signin route hit");
     const email = req.body.email;
     const password = req.body.password;
 
-    //checking the user exist or not
-    const response = await UserModel.findOne({
-        email: email,
-        password: password
+    try {
+        // Check if user exists
+        const user = await UserModel.findOne({ email: email });
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
 
-    });
-    if (!response) {
-        res.json({
-            message: "User not found"
-        })
-        return
-    }
-    //checking the password
-    const isMatch = bcrypt.compare(password, response.password);
-   ;
-    if (!isMatch) {
-        res.status(403).send({
-            message: "Invalid password"
-        })
-    } else {
+        // Check if the password is correct using await
+        const isMatch = await bcrypt.compare(password, user.password);
+
+        if (!isMatch) {
+            console.log("Password does not match");
+            return res.status(403).json({ message: "Invalid password" });
+        }
+
+        // Generate a token upon successful sign-in
         const token = jwt.sign({
-            id: response._id.toString()
+            id: user._id.toString(),
+            email: user.email
         }, JWT_SECRET);
-        res.json({
-            message: "succefullt signined",
+
+        console.log("Token generated:", token);
+
+        // Send token to the client
+        return res.json({
+            message: "Successfully signed in",
             token: token
         });
+
+    } catch (error) {
+        console.error("Error during sign-in:", error);
+        return res.status(500).json({ error: "Server error" });
     }
-    console.log("respPass" + response.data.password);
-    console.log(isMatch);
-})
+});
+
+
+
 //creating the middleware
 
 function authenticationMiddlware(req, res, next) {
-    // const token = req.headers.token;
-    // const decodeData = jwt.verify(token,JWT_SECRET);
-    // if(!decodeData){
-    //     res.status(403).send({
-    //         message : "Incorrect credentials"
-    //     });
-    // }else{
-    //     req.userId = decodeData.id;
-    //     next();
-    // }
+    
     const token = req.headers.authorization && req.headers.authorization.split(' ')[1];
 
-    // Check if a token is present
     if (!token) {
-        return res.status(401).send({ message: "Unauthorized: No token provided" }); // Send a 401 (Unauthorized) response
+        return res.status(401).send({ message: "Unauthorized: No token provided" });
     }
 
     try {
         // Verify the token using JWT secret
         const decodedData = jwt.verify(token, JWT_SECRET);
-        req.userId = decodedData.id; // Store the user ID from the decoded token for further use
+        req.user = decodedData; // Store the user ID from the decoded token for further use
         next();
     } catch (error) {
         // Handle invalid token errors
@@ -196,10 +152,13 @@ function authenticationMiddlware(req, res, next) {
 }
 
 app.post("/todo", authenticationMiddlware, async (req, res) => {
-    const userId = req.userId;
+    const userId = req.user.id;
     const title = req.body.title;
 
     try {
+
+        console.log('User ID:', userId);
+        console.log('Todo title:', title);
         // Create the todo item
         const todo = await TodoModel.create({
             title: title,

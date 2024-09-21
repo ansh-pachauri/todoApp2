@@ -1,46 +1,36 @@
 
-document.addEventListener("DOMContentLoaded",()=>{
-    document.getElementById('signin-form').addEventListener('DOMContentLoaded', function(event) {
-        event.preventDefault(); // Prevent the default form submission behavior
-        signin();
-      });
-});
 
+const signin = async (event) => {
+    event.preventDefault(); // Prevent default form submission
 
-
-
-  async function signin() {
-    const email = document.getElementById("email").value;
-    const password = document.getElementById("password").value;
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
 
     try {
         const response = await axios.post('http://localhost:3000/signin', {
             email: email,
             password: password
         });
-        if(response.data.token){
-            const token  = response.data.token;
-            localStorage.setItem('authToken',token);
-            alert(response.data.message);
-            window.location.href ="/frontend.html";
-            
-        }else{
-            alert(response.data.message);
-        }
+        console.log('Sign-in successful:', response.data);
         
-        // document.getElementById('username-dispaly').innerHTML = `Welcome,${email}`;  
-        
+        // Save token and redirect
+        localStorage.setItem('token', response.data.token);
+        window.location.href = '/frontend.html'; // Replace with your actual frontend page
+       
     } catch (error) {
-        if (error.response) {
-            alert(error.response.data.message);
-        } else {
-            alert("Network Error");
-        }
-        console.error('Error:', error);
+        console.error('Error during sign-in:', error.response?.data?.message || 'Unknown error');
+        alert(error.response?.data?.message || 'Sign-in failed');
     }
-}
+};
+
+console.log("signup end");
 
 
 
+
+
+
+
+document.getElementById('signin-form').addEventListener('submit', signin);
 
 
